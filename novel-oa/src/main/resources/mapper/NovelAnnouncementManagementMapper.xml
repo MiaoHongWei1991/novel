@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.novel.cn.dao.mapper.AnnouncementManagementMapper">
+    <resultMap id="BaseResultMap" type="com.novel.cn.dao.entity.TblNovelAnnouncementManagement">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="content" property="content"/>
+        <result column="end_time" property="overTime"/>
+        <result column="update_time" property="updateTime"/>
+        <!--表外字段 -->
+        <result column="fuzzy" property="fuzzy"/>
+    </resultMap>
+    <sql id="BaseSql">
+        n.id,n.user_id,n.status,n.content,n.create_time,n.end_time,n.update_time
+    </sql>
+    <!--查询公告列表 -->
+    <select id="queryAnnouncementManager" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT
+          <include refid="BaseSql" />
+        FROM
+          tbl_novel_notice n
+        <if test="fuzzy != null and fuzzy != '' ">
+            WHERE
+            n.content LIKE concat('%',#{fuzzy,jdbcType=VARCHAR},'%')
+        </if>
+        GROUP BY
+        n.create_time DESC
+    </select>
+
+    <!--新增公告 -->
+    <insert id="insertAnnouncement" parameterType="com.novel.cn.dao.entity.TblNovelAnnouncementManagement">
+
+        INSERT INTO tbl_novel_notice
+          (user_id,status,content,create_time,end_time,update_time)
+        VALUES
+	      (
+	      #{userId},#{status},#{content},SYSDATE(),#{overTime},SYSDATE()
+        );
+    </insert>
+
+    <update id="updateAnnouncement" parameterType="com.novel.cn.dao.entity.TblNovelAnnouncementManagement">
+        update tbl_novel_notice s
+        <set>
+          s.content = #{content},
+          s.status = #{status},
+          s.update_time = SYSDATE(),
+          s.end_time = #{overTime}
+        </set>
+        where
+        s.id = #{id}
+    </update>
+
+    <delete id="deleteAnnouncement" parameterType="com.novel.cn.web.announcementController.form.NovelAnnouncementManagementForm">
+        DELETE FROM tbl_novel_notice WHERE id = #{id}
+    </delete>
+
+    <select id="selectByPrimary" parameterType="long" resultMap="BaseResultMap">
+        select * from tbl_novel_notice WHERE id = #{id}
+    </select>
+
+    <insert id="insertUserActive">
+       INSERT INTO user_active(userCount,active_date)
+       VALUES(#{userCount},#{activeDate})
+    </insert>
+
+    <select id="findUserActiveByActiveDate" parameterType="java.lang.String"
+            resultType="com.novel.cn.service.announcement.result.UserActiveResult">
+       SELECT id,userCount,active_date as activeDate FROM user_active
+       WHERE active_date=#{activeDate}
+    </select>
+
+    <update id="updateUserActive">
+       UPDATE user_active SET userCount=#{userCount}
+       WHERE id=#{id}
+    </update>
+</mapper>

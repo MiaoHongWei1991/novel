@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.novel.cn.dao.mapper.MobileNookshelMapper">
+    <resultMap id="mobileNookshelfMap" type="com.novel.cn.service.personalCenterService.result.MobileNookshelfResult">
+        <id column="novelId" property="novelId"/>
+        <result column="novelTitle" property="novelTitle"/>
+        <result column="novelPoto" property="novelPoto"/>
+        <result column="readChapterId" property="readChapterId"/>
+        <result column="readIsFree" property="readIsFree"/>
+        <result column="readMoney" property="readMoney"/>
+        <result column="newChapterId" property="newChapterId"/>
+        <result column="newChapter" property="newChapter"/>
+        <result column="newChapterTitle" property="newChapterTitle"/>
+        <result column="newIsFree" property="newIsFree"/>
+        <result column="newMoney" property="newMoney"/>
+        <result column="auto" property="auto"/>
+        <result column="isRecord" property="isRecord"/>
+        <result column="create_time" property="readTime" />
+        <result column="orderNum" property="orderNum" />
+    </resultMap>
+
+    <!--app获取已阅读的收藏小说-->
+    <select id="getAppReadCollection"  resultMap="mobileNookshelfMap">
+        SELECT  novel.id AS novelId,novel.novel_title AS novelTitle,CONCAT(image.base_filepath, image.filepath) AS novelPoto,
+                true AS isRecord,chapter.id AS readChapterId,chapter.is_free AS readIsFree,chapter.chapter_money AS readMoney,
+                IF((IFNULL(s.is_auto,0)=1),true,false) AS auto,
+                t.chapter_id AS newChapterId,t.sub_title AS newChapterTitle,t.chapter as newChapter,t.is_free AS newIsFree,
+                t.chapter_money AS newChapterMoney,tnc.order_num as orderNum
+        FROM tbl_novel AS novel
+        LEFT JOIN (SELECT id,base_filepath, filepath,novel_id FROM tbl_novel_image WHERE file_type=0) image ON novel.id=image.novel_id
+        LEFT JOIN tbl_novel_volume AS volume ON volume.novel_id=novel.id
+        LEFT JOIN tbl_novel_chapter AS chapter ON (chapter.volume_id=volume.id AND chapter.novel_id=novel.id)
+        LEFT JOIN tbl_novel_author AS author ON (novel.user_id=author.user_id)
+        LEFT JOIN (SELECT novel_id,is_auto FROM tbl_novel_subscibe WHERE user_id=#{userId}) s ON  novel.id=s.novel_id
+        LEFT JOIN (SELECT newC.novel_id,newC.chapter_id,c.sub_title,c.chapter ,c.is_free,c.chapter_money,newV.id AS newVolumeId
+        FROM tbl_novel_new_chapter newC,tbl_novel_chapter c,tbl_novel_volume newV
+        WHERE newC.novel_id=c.novel_id AND newC.chapter_id=c.id
+        AND newV.id=newC.volume_id) t ON novel.id=t.novel_id
+        LEFT JOIN tbl_novel_collection tnc on (tnc.user_id = #{userId} and tnc.novel_id = novel.id)
+        WHERE chapter.id IN
+        <foreach collection="readRecordList" index="index" item="item" open="(" separator="," close=")" >
+            #{item.chapterId}
+        </foreach>
+        AND novel.id IN
+        <foreach collection="readRecordList" index="index" item="item" open="(" separator="," close=")">
+            #{item.novelId}
+        </foreach>
+        ORDER BY tnc.order_num desc
+    </select>
+    <!--app查询第一章收藏小说-->
+    <select id="getAppUnreadCollection" resultMap="mobileNookshelfMap">
+        select n.id AS novelId ,n.novel_title AS novelTitle,CONCAT(image.base_filepath, image.filepath) AS novelPoto,
+                c1.id AS chapterId,false AS isRecord,c1.is_free AS readIsFree,c1.chapter_money AS readMoney,
+        IF((IFNULL(s.is_auto,0)=1),true,false) AS auto,
+        t.chapter_id AS newChapterId,t.sub_title AS newChapterTitle,t.chapter as newChapter,t.is_free AS newIsFree,
+        t.chapter_money AS newChapterMoney,collect.order_num as orderNum
+        from tbl_novel n
+        LEFT JOIN (SELECT id,base_filepath, filepath,novel_id FROM tbl_novel_image WHERE file_type=0) image ON n.id=image.novel_id
+        LEFT JOIN (select min(volume) volume, novel_id from tbl_novel_volume
+        where `status`=1
+        GROUP BY novel_id
+        ) v ON n.id=v.novel_id
+        LEFT JOIN tbl_novel_volume vl ON (n.id = vl.novel_id AND vl.volume = v.volume and vl.status = 1)
+        LEFT JOIN (select min(chapter) chapter, volume_id from tbl_novel_chapter
+        where `status`=1
+        GROUP BY volume_id
+        ) c ON c.volume_id=vl.id
+        LEFT JOIN tbl_novel_chapter c1 ON (c1.novel_id = n.id AND c1.volume_id = vl.id AND c1.chapter = c.chapter and c1.status = 1)
+        LEFT JOIN (SELECT novel_id,is_auto FROM tbl_novel_subscibe WHERE user_id=#{user_id}) s ON  n.id=s.novel_id
+        LEFT JOIN (SELECT newC.novel_id,newC.chapter_id,c.sub_title,c.chapter ,c.is_free,c.chapter_money,newV.id AS newVolumeId
+        FROM tbl_novel_new_chapter newC,tbl_novel_chapter c,tbl_novel_volume newV
+        WHERE newC.novel_id=c.novel_id AND newC.chapter_id=c.id
+        AND newV.id=newC.volume_id) t 	ON n.id=t.novel_id
+        LEFT JOIN tbl_novel_author AS author ON (n.user_id=author.user_id),
+        tbl_novel_collection AS collect
+        WHERE collect.novel_id=n.id
+        AND collect.user_id=#{user_id}
+        AND collect.novel_id in
+        <foreach collection="novleIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        ORDER BY collect.order_num  DESC
+    </select>
+
+    <!--app查询小说历史浏览记录-->
+    <select id="getNovleHistory" resultMap="mobileNookshelfMap">
+        SELECT novel.id AS novelId,novel.novel_title AS novelTitle,CONCAT(image.base_filepath, image.filepath) AS novelPoto,
+               t1.chapterId AS newChapterId,t1.chapter AS newChapter,t1.sub_title AS newChapterTitle,
+			    t1.newIsFree,t1.newMoney,t2.readChapterId,t2.readIsFree,t2.readMoney,
+			    IF((IFNULL(s.is_auto,0)=1),true,false) AS auto, r.create_time
+        FROM
+        (tbl_novel novel ,tbl_novel_author u,tbl_novel_read_history r)
+        LEFT JOIN (SELECT id,base_filepath, filepath,novel_id FROM tbl_novel_image WHERE file_type=0) image ON novel.id=image.novel_id
+        LEFT JOIN (SELECT novel_id, is_auto FROM tbl_novel_subscibe WHERE user_id=1) s ON novel.id=s.novel_id,
+        (select n.id ,c1.id as chapterId,c1.chapter,c1.sub_title,c1.volume_id as volumeId ,vo.volume,c1.is_free AS newIsFree,c1.chapter_money AS newMoney
+        from tbl_novel n
+        LEFT JOIN tbl_novel_new_chapter nc ON n.id=nc.novel_id
+        LEFT JOIN tbl_novel_chapter c1 ON (c1.novel_id=nc.novel_id AND c1.id=nc.chapter_id)
+        LEFT JOIN tbl_novel_volume vo ON c1.volume_id=vo.id
+        where n.id in(select novel_id from tbl_novel_read_history where user_id=#{userId} AND status=0)) t1,
+        (SELECT novel.id,chapter.id as readChapterId ,chapter.chapter AS readChapter ,chapter.sub_title AS readSub_title,
+        volume.id AS readVolumeid,volume.volume AS readVolume,chapter.is_free AS readIsFree,chapter.chapter_money AS readMoney
+        FROM tbl_novel AS novel
+        LEFT JOIN tbl_novel_volume AS volume ON volume.novel_id=novel.id
+        LEFT JOIN tbl_novel_chapter AS chapter ON (chapter.volume_id=volume.id AND chapter.novel_id=novel.id)
+        WHERE  chapter.id IN ( select chapter_id from tbl_novel_read_history where user_id=#{userId} AND status=0)) t2
+        WHERE t1.id=t2.id AND novel.id=t1.id AND novel.user_id=u.user_id AND novel.id=r.novel_id
+        AND r.`status`=0
+        AND r.user_id=#{userId}
+        ORDER BY r.create_time DESC
+    </select>
+
+
+    <!--查询已阅读订阅公用sql-->
+    <sql id="readingSubscriptions">
+        SELECT novel.id AS novelId,novel.novel_title AS novelTitle,CONCAT(image.base_filepath,image.filepath) AS novelPoto,
+        true AS isRecord,chapter.id AS readChapterId,chapter.is_free AS readIsFree,chapter.chapter_money AS readMoney,
+        IF((IFNULL(s.is_auto,0)=1),true,false) AS auto,
+        newt.chapter_id AS newChapterId,newt.sub_title AS newChapterTitle,newt.chapter as newChapter,newt.is_free AS newIsFree,
+        newt.chapter_money AS newMoney
+        FROM tbl_novel AS novel
+        LEFT JOIN (SELECT id,base_filepath,filepath,novel_id FROM tbl_novel_image WHERE file_type=0) AS image ON novel.id=image.novel_id
+        LEFT JOIN tbl_novel_volume AS volume ON volume.novel_id=novel.id
+        LEFT JOIN tbl_novel_chapter AS chapter ON (chapter.volume_id=volume.id AND chapter.novel_id=novel.id)
+        LEFT JOIN tbl_novel_author AS author ON (novel.user_id=author.user_id)
+        LEFT JOIN (SELECT newC.novel_id,newC.chapter_id,c.sub_title,c.chapter ,c.is_free,c.chapter_money,newV.id AS newVolumeId
+        FROM tbl_novel_new_chapter newC,tbl_novel_chapter c,tbl_novel_volume newV
+        WHERE newC.novel_id=c.novel_id AND newC.chapter_id=c.id
+        AND newV.id=newC.volume_id) newt 	ON novel.id=newt.novel_id
+        LEFT JOIN (SELECT novel_id,create_time,is_auto FROM tbl_novel_subscibe WHERE user_id=#{user_id}) s ON  novel.id=s.novel_id
+        WHERE chapter.id IN
+        <foreach collection="readLst" index="index" item="item" open="(" separator="," close=")" >
+            #{item.chapterId}
+        </foreach>
+        AND novel.id IN
+        <foreach collection="readLst" index="index" item="item" open="(" separator="," close=")">
+            #{item.novelId}
+        </foreach>
+    </sql>
+    <!--查询阅读过的自动订阅小说-->
+    <select id="getMyBookByReadLst"  resultMap="mobileNookshelfMap">
+        <include refid="readingSubscriptions"/>
+    </select>
+    <!--查询第一章小说公用sql-->
+    <sql id="minMyBookSql">
+        select n.id AS novelId ,n.novel_title AS novelTitle,CONCAT(image.base_filepath,image.filepath) AS novelPoto,
+                c1.id AS readChapterId,
+                false AS isRecord,c1.is_free AS readIsFree,c1.chapter_money AS readMoney,
+                IF((IFNULL(s.is_auto,0)=1),true,false) AS auto,t.chapter_money AS newChapterMoney,
+                t.chapter_id AS newChapterId,t.sub_title AS newChapterTitle,t.chapter as newChapter,t.is_free AS newIsFree
+        from tbl_novel n
+        LEFT JOIN (SELECT id,base_filepath,filepath,novel_id FROM tbl_novel_image WHERE file_type=0) image ON n.id=image.novel_id
+        LEFT JOIN (select min(volume) volume, novel_id from tbl_novel_volume
+                    where `status`=1
+                    GROUP BY novel_id
+        ) v ON n.id=v.novel_id
+        LEFT JOIN tbl_novel_volume vl ON (n.id = vl.novel_id AND vl.volume = v.volume and vl.status = 1)
+        LEFT JOIN (select min(chapter) chapter, volume_id from tbl_novel_chapter
+                    where `status`=1
+                    GROUP BY volume_id
+        ) c ON c.volume_id=vl.id
+        LEFT JOIN tbl_novel_chapter c1 ON (c1.novel_id = n.id AND c1.volume_id = vl.id AND c1.chapter = c.chapter and c1.status = 1)
+        LEFT JOIN (SELECT novel_id,is_auto FROM tbl_novel_subscibe WHERE user_id=#{user_id}) s ON  n.id=s.novel_id
+        LEFT JOIN (SELECT newC.novel_id,newC.chapter_id,c.sub_title,c.chapter ,c.is_free,c.chapter_money,newV.id AS newVolumeId
+                    FROM tbl_novel_new_chapter newC,tbl_novel_chapter c,tbl_novel_volume newV
+                    WHERE newC.novel_id=c.novel_id AND newC.chapter_id=c.id
+                    AND newV.id=newC.volume_id) t 	ON n.id=t.novel_id
+        LEFT JOIN tbl_novel_author AS author ON (n.user_id=author.user_id),
+    </sql>
+    <!--根据小说idlist查询第一章自动订阅小说-->
+    <select id="getMyBookByNovelIds" resultMap="mobileNookshelfMap">
+        <include refid="minMyBookSql"/>
+        tbl_novel_subscibe AS subscibe
+        WHERE subscibe.novel_id=n.id
+        AND subscibe.user_id=#{user_id}
+        AND subscibe.novel_id in
+        <foreach collection="novelIds" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        ORDER BY subscibe.create_time DESC
+    </select>
+
+    <!--app书架 书籍移动-->
+    <update id="moveMyNovel" >
+        <foreach item="value" index="key" collection="novelMap.entrySet()" separator=";" >
+          UPDATE tbl_novel_collection
+            SET order_num = #{value}
+          WHERE
+	        user_id = #{userId} AND novel_id = #{key}
+        </foreach>
+    </update>
+</mapper>

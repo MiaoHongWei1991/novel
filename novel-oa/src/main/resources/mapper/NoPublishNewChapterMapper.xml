@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.novel.cn.dao.mapper.NoPublishNewChapterMapper" >
+  <resultMap id="BaseResultMap" type="com.novel.cn.dao.entity.NewChapterInfo" >
+    <id column="novel_id" property="novelId" jdbcType="VARCHAR" />
+    <result column="volume_id" property="volumeId" jdbcType="VARCHAR" />
+    <result column="volume" property="volume" jdbcType="INTEGER" />
+    <result column="chapter_id" property="chapterId" jdbcType="VARCHAR" />
+    <result column="chapter" property="chapter" jdbcType="INTEGER" />
+    <result column="chapter_title" property="chapterTitle" jdbcType="VARCHAR" />
+    <result column="create_time" property="createTime" jdbcType="DATE" />
+  </resultMap>
+
+  <insert id="saveNewChapterInfo" parameterType="com.novel.cn.dao.entity.NewChapterInfo">
+    INSERT INTO tbl_novel_no_publish_new_chapter (novel_id, volume_id, volume, chapter_id, chapter, chapter_title, create_time)
+    VALUES (#{novelId, jdbcType=VARCHAR}, #{volumeId, jdbcType=VARCHAR}, #{volume, jdbcType=INTEGER},
+            #{chapterId, jdbcType=VARCHAR}, #{chapter, jdbcType=INTEGER}, #{chapterTitle, jdbcType=VARCHAR}, #{createTime, jdbcType=DATE})
+  </insert>
+
+  <update id="updateNewChapterInfoByNovelId" parameterType="com.novel.cn.dao.entity.NewChapterInfo">
+    UPDATE tbl_novel_no_publish_new_chapter
+    <set>
+      <if test="volumeId != null and volumeId != ''">volume_id = #{volumeId, jdbcType=VARCHAR},</if>
+      <if test="volume != null">volume = #{volume, jdbcType=INTEGER},</if>
+      <if test="chapterId != null and chapterId != ''">chapter_id = #{chapterId, jdbcType=VARCHAR},</if>
+      <if test="chapter != null">chapter = #{chapter, jdbcType=INTEGER},</if>
+      <if test="chapterTitle != null and chapterTitle != ''">chapter_title = #{chapterTitle, jdbcType=VARCHAR},</if>
+      <if test="createTime != null and createTime != ''">create_time = #{createTime, jdbcType=DATE}</if>
+    </set>
+    WHERE novel_id = #{novelId, jdbcType=VARCHAR}
+  </update>
+
+  <delete id="deleteNewChapterByNovelId" parameterType="java.lang.String">
+    DELETE FROM tbl_novel_no_publish_new_chapter WHERE novel_id = #{novelId, jdbcType=VARCHAR}
+  </delete>
+
+  <select id="getChapterInfoByNovelId" parameterType="java.lang.String" resultMap="BaseResultMap">
+    SELECT * FROM tbl_novel_no_publish_new_chapter
+    WHERE novel_id=#{novelId}
+  </select>
+
+</mapper>

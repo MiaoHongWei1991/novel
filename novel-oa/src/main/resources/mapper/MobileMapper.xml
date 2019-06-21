@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.novel.cn.dao.mapper.MobileMapper">
+    <resultMap id="VolumeResultMap" type="java.util.HashMap">
+        <id column="volume" property="volume" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="title" property="title" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter_num" property="chapterNum" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <select id="getVolumes" parameterType="java.lang.String" resultMap="VolumeResultMap">
+        SELECT v.volume, v.title, COUNT(c.id) AS chapter_num FROM tbl_novel_volume v
+            LEFT JOIN tbl_novel_chapter c ON v.id=c.volume_id
+        WHERE v.novel_id=#{novelId}
+        GROUP BY v.volume ORDER BY v.volume ASC
+    </select>
+
+    <resultMap id="ChapterResultMap" type="java.util.HashMap">
+        <id column="id" property="id" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter" property="chapter" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="sub_title" property="title" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="is_free" property="isFree" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="is_locked" property="isLocked" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="is_reading" property="isReading" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <select id="getChapters" parameterType="java.lang.String" resultMap="ChapterResultMap">
+        SELECT c.id, c.chapter, c.sub_title, c.is_free, CASE WHEN c.status != 1 THEN 1 ELSE 0 END AS is_locked,
+            CASE WHEN r.chapter_id IS NOT NULL THEN 1 ELSE 0 END AS is_reading
+        FROM tbl_novel_chapter c
+            LEFT JOIN tbl_novel_volume v ON c.volume_id=v.id
+            LEFT JOIN (SELECT chapter_id FROM tbl_novel_read_history WHERE user_id=#{userId}) r ON r.chapter_id=c.id
+        WHERE c.novel_id=#{novelId} AND v.volume=#{volume}
+        <choose>
+            <when test="sort != null and sort != ''">ORDER BY chapter ${sort}</when>
+            <otherwise>ORDER BY chapter ASC</otherwise>
+        </choose>
+    </select>
+
+    <resultMap id="HomepageResultMap" type="java.util.HashMap">
+        <id column="id" property="novelId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="novel_title" property="novelTitle" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="novel_photo" property="novelPhoto" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="type_name" property="novelType" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="pen_name" property="novelAuthor" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="novel_describe" property="novelIntro" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <select id="getHeadRecommend" parameterType="java.lang.String" resultMap="HomepageResultMap">
+        SELECT n.id, n.novel_title, CONCAT(#{imgServerUrl},tg.base_filepath,tg.filepath) AS novel_photo
+        FROM tbl_novel_tg tg
+            LEFT JOIN tbl_novel n ON tg.novel_id=n.id
+        WHERE tg.status=1 AND tg.type=2
+    </select>
+
+    <select id="getHotRecommend" parameterType="java.lang.Integer" resultMap="HomepageResultMap">
+        SELECT n.id, n.novel_title FROM tbl_novel n
+        INNER JOIN tbl_novel_total_list h ON n.id=h.novel_id
+        WHERE n.publish_status = 1 AND n.status = 1
+        ORDER BY h.total_click DESC
+        <if test="limitNum !=null and limitNum !=0">
+            LIMIT #{limitNum}
+        </if>
+    </select>
+
+    <select id="getEditorRecommend" parameterType="java.lang.String" resultMap="HomepageResultMap">
+        SELECT n.id, n.novel_title, CONCAT(#{imgServerUrl},i.base_filepath,i.filepath) AS novel_photo
+        FROM tbl_novel_home h
+            LEFT JOIN tbl_novel n ON h.novel_id=n.id
+            LEFT JOIN tbl_novel_image i ON i.novel_id=n.id
+        WHERE h.position like 'left%' AND i.file_type=0
+        ORDER BY h.position ASC
+    </select>
+
+    <select id="getHomepageRecommend" parameterType="java.lang.String" resultMap="HomepageResultMap">
+        SELECT n.id, n.novel_title, CONCAT(#{imgServerUrl},i.base_filepath,i.filepath) AS novel_photo,
+            t.type_name, a.pen_name, n.novel_describe
+        FROM tbl_novel_home_zone h
+            LEFT JOIN tbl_novel n ON h.novel_id=n.id
+            LEFT JOIN tbl_novel_image i ON i.novel_id=n.id
+            LEFT JOIN tbl_novel_type t ON n.novel_type_id=t.id
+            LEFT JOIN tbl_novel_author a ON n.user_id=a.user_id
+        WHERE h.label_id=#{type} AND i.file_type=0
+    </select>
+
+    <resultMap id="RecentUpdateResultMap" type="java.util.HashMap">
+        <id column="id" property="novelId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="novel_title" property="novelTitle" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="type_name" property="novelType" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter_id" property="chapterId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter" property="chapter" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="sub_title" property="chapterTitle" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <select id="getRecentUpdate" parameterType="java.lang.String" resultMap="RecentUpdateResultMap">
+        SELECT n.id, n.novel_title, t.type_name, c.id AS chapter_id, c.chapter, c.sub_title
+        FROM tbl_novel n
+            LEFT JOIN tbl_novel_chapter c ON n.id=c.novel_id
+            LEFT JOIN tbl_novel_new_chapter nc ON c.id=nc.chapter_id
+            LEFT JOIN tbl_novel_type t ON n.novel_type_id=t.id
+        WHERE DATE_FORMAT(nc.create_time,'%Y%m%d')&gt;=#{startDate} AND DATE_FORMAT(nc.create_time,'%Y%m%d')&lt;=#{endDate}
+        ORDER BY c.create_time DESC
+    </select>
+
+    <resultMap id="NovelInfoMap" type="java.util.HashMap">
+        <id column="id" property="novelId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="novel_title" property="novelTitle" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="novel_photo" property="novelPhoto" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="author_id" property="authorId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="pen_name" property="novelAuthor" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="type_name" property="novelType" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="is_over" property="isOver" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="have_volumes" property="haveVolumes" javaType="java.lang.String" jdbcType="VARCHAR" />
+        <result column="novel_words" property="novelWords" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="total_click" property="clickNum" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="novel_describe" property="novelIntro" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="is_subscibe" property="isSubscibe" javaType="java.lang.String" jdbcType="VARCHAR" />
+        <result column="chapter_count" property="chapterCount" javaType="java.lang.String" jdbcType="VARCHAR" />
+        <result column="is_collection" property="isCollection" javaType="java.lang.String" jdbcType="VARCHAR" />
+        <result column="vip_is_free" property="vipIsFree" javaType="java.lang.Boolean" jdbcType="BOOLEAN" />
+        <result column="is_free_limit" property="isFreeLimit" javaType="java.lang.Boolean" jdbcType="BOOLEAN" />
+        <association property="readingVolumeInfo" resultMap="ReadVolumeInfoMap" />
+    </resultMap>
+
+    <resultMap id="ReadVolumeInfoMap" type="java.util.HashMap">
+        <id column="read_volume_id" property="volumeId" jdbcType="VARCHAR" />
+        <result column="read_volume" property="volume" jdbcType="VARCHAR" />
+        <result column="read_volume_title" property="volumeTitle" jdbcType="VARCHAR" />
+        <association property="readingChapterInfo" resultMap="ReadChapterInfoMap" />
+    </resultMap>
+
+    <resultMap id="ReadChapterInfoMap" type="java.util.HashMap">
+        <id column="read_chapter_id" property="chapterId" jdbcType="VARCHAR" />
+        <result column="read_chapter" property="chapter" jdbcType="VARCHAR" />
+        <result column="read_chapter_title" property="chapterTitle" jdbcType="VARCHAR" />
+        <result column="read_chapter_is_free" property="isFree" jdbcType="VARCHAR" />
+        <result column="read_chapter_money" property="money" jdbcType="VARCHAR" />
+        <result column="read_chapter_status" property="isLocked" jdbcType="VARCHAR" />
+    </resultMap>
+
+    <select id="getNovelInfo" parameterType="java.lang.String" resultMap="NovelInfoMap">
+        SELECT n.id, n.novel_title, a.user_id AS author_id, a.pen_name, t.type_name, n.is_over, n.novel_words,
+          l.total_click, n.novel_describe, n.have_volumes, tnc.chapter_count, n.vip_is_free,
+            CASE WHEN n.is_free_limit='limit' THEN TRUE ELSE FALSE END AS is_free_limit,
+            <choose>
+                <when test="userId != null and userId != ''">
+                    CASE WHEN tns.is_auto=1 THEN 'true' else 'false' END AS is_subscibe,
+                    CASE WHEN tnuc.novel_id IS NOT NULL THEN 'true' else 'false' END AS is_collection,
+                    tnrh.*,
+                </when>
+                <otherwise>
+                    'false' AS is_subscibe, 'false' AS is_collection,
+                </otherwise>
+            </choose>
+            CONCAT(#{imgServerUrl},i.base_filepath,i.filepath) AS novel_photo
+        FROM tbl_novel n
+            LEFT JOIN tbl_novel_author a ON n.user_id=a.user_id
+            LEFT JOIN tbl_novel_image i ON n.id=i.novel_id AND i.file_type=0
+            LEFT JOIN tbl_novel_type t ON n.novel_type_id=t.id
+            LEFT JOIN tbl_novel_total_list l ON n.id=l.novel_id
+            LEFT JOIN (SELECT count(id) AS chapter_count FROM tbl_novel_chapter WHERE novel_id=#{novelId}) tnc ON 1=1
+            <if test="userId != null and userId != ''">
+                LEFT JOIN (SELECT is_auto FROM tbl_novel_subscibe WHERE user_id=#{userId} AND novel_id=#{novelId}) tns ON 1=1
+                LEFT JOIN (SELECT novel_id FROM tbl_novel_collection WHERE user_id=#{userId} AND novel_id=#{novelId}) tnuc ON 1=1
+                LEFT JOIN (SELECT v.id AS read_volume_id, v.volume AS read_volume, v.title AS read_volume_title,
+                c.id AS read_chapter_id, c.chapter AS read_chapter, c.sub_title AS read_chapter_title,
+                c.is_free AS read_chapter_is_free, c.chapter_money AS read_chapter_money,
+                CASE WHEN c.id IS NOT NULL THEN (CASE WHEN c.status != 1 THEN 'true' ELSE 'false' END) ELSE NULL END AS read_chapter_status
+                FROM tbl_novel_read_history r
+                LEFT JOIN tbl_novel_chapter c ON r.chapter_id=c.id
+                LEFT JOIN tbl_novel_volume v ON c.novel_id=v.novel_id AND c.volume_id=v.id
+                WHERE r.novel_id=#{novelId} AND r.user_id=#{userId}) tnrh ON 1=1
+            </if>
+        WHERE n.id=#{novelId}
+    </select>
+
+    <select id="getFirstVolumeChapter" parameterType="java.lang.String" resultMap="ReadVolumeInfoMap">
+        SELECT v.id AS read_volume_id, v.volume AS read_volume, v.title AS read_volume_title,
+               c.id AS read_chapter_id, c.chapter AS read_chapter, c.sub_title AS read_chapter_title,
+               c.is_free AS read_chapter_is_free, c.chapter_money AS read_chapter_money,
+               CASE WHEN c.id IS NOT NULL THEN (CASE WHEN c.status != 1 THEN 'true' ELSE 'false' END) ELSE NULL END AS read_chapter_status
+        FROM tbl_novel_volume v LEFT JOIN tbl_novel_chapter c ON v.id=c.volume_id
+        WHERE v.novel_id=#{novelId} AND v.volume IN (0, 1) AND c.chapter=1
+    </select>
+
+    <resultMap id="NewChapterMap" type="java.util.HashMap">
+        <id column="id" property="id" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter" property="chapter" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="sub_title" property="title" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="is_free" property="isFree" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter_money" property="money" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="publish_time" property="publishTime" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <select id="getNovelNewChapter" parameterType="java.lang.String" resultMap="NewChapterMap">
+        SELECT c.id, c.chapter, c.sub_title, c.is_free, c.chapter_money, DATE_FORMAT(c.publish_time,'%Y-%m-%d %H:%i') AS publish_time
+        FROM tbl_novel_new_chapter nc
+            LEFT JOIN tbl_novel_chapter c ON nc.chapter_id=c.id
+        WHERE nc.novel_id=#{novelId}
+    </select>
+    
+    <resultMap id="RewardMap" type="java.util.HashMap">
+        <id column="novel_id" property="novelId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="reward_count" property="rewardCount" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <select id="getBoostRecommendRank" resultMap="RewardMap">
+        SELECT novel_id,week_recommend_ticket AS reward_count FROM tbl_novel_week_list ORDER BY week_recommend_ticket DESC
+    </select>
+
+    <select id="getBoostDiamondRank" resultMap="RewardMap">
+        SELECT novel_id,week_diamond AS reward_count FROM tbl_novel_week_list ORDER BY week_diamond DESC
+    </select>
+
+    <select id="getBoostMonthRecommendRank" resultMap="RewardMap">
+        SELECT novel_id,week_month_recommend_ticket AS reward_count FROM tbl_novel_week_list ORDER BY week_month_recommend_ticket DESC
+    </select>
+
+    <resultMap id="RewardMoneyMap" type="java.util.HashMap">
+        <id column="novel_id" property="novelId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="week_count" property="difference" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="today_count" property="rewardCount" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <select id="getBoostMoneyRank" resultMap="RewardMoneyMap">
+        SELECT #{novelId} AS novel_id, w.week_count, t.today_count FROM
+        (SELECT COUNT(DISTINCT boost_user_id) AS week_count FROM tbl_novel_boost WHERE boost_type='阅读币'
+        AND DATE_FORMAT(boost_time,'%Y-%m-%d') &gt;= DATE_FORMAT(#{startDate},'%Y-%m-%d')
+        AND DATE_FORMAT(boost_time,'%Y-%m-%d') &lt;= DATE_FORMAT(#{endDate},'%Y-%m-%d')
+        AND novel_id=#{novelId}) w LEFT JOIN
+        (SELECT COUNT(DISTINCT boost_user_id) AS today_count FROM tbl_novel_boost WHERE boost_type='阅读币'
+        AND DATE_FORMAT(boost_time,'%Y-%m-%d') = DATE_FORMAT(#{todayDate},'%Y-%m-%d') AND novel_id=#{novelId}) t ON 1=1
+    </select>
+
+    <resultMap id="FansRewardMap" type="java.util.HashMap">
+        <id column="novel_id" property="novelId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="user_nick_name" property="fansName" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="reward_count" property="rewardCount" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="boost_type" property="rewardType" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <select id="getFansRewardInfo" parameterType="java.lang.String" resultMap="FansRewardMap">
+        SELECT b.novel_id, b.boost_type, u.user_nick_name,
+            CASE WHEN b.boost_type='阅读币' THEN 0 + CAST(IFNULL(b.money,0) + IFNULL(b.system_money,0) AS CHAR)
+            WHEN b.boost_type='钻石' THEN b.diamond WHEN b.boost_type='推荐票' THEN b.recommend_ticket
+            WHEN b.boost_type='月票' THEN b.month_recommend_ticket ELSE 0 END AS reward_count
+        FROM tbl_novel_boost b LEFT JOIN `user` u ON b.boost_user_id=u.user_id
+        WHERE b.novel_id=#{novelId}
+        ORDER BY boost_time DESC LIMIT 5
+    </select>
+
+    <resultMap id="PersonCenterMap" type="java.util.HashMap">
+        <id column="user_id" property="userId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="user_nick_name" property="userName" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="user_photo" property="userPhoto" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="user_gender" property="userGender" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="grade" property="userLevel" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="user_introduction" property="userIntro" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="diamond_number" property="diamonds" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="gold_number" property="moneys" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="recommend_number" property="recommendTickets" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="month_recommend_number" property="monthTickets" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="msg_count" property="msgCount" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="meet_days" property="meetDays" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="read_count" property="readCount" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="sign_days" property="signDays" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="discountCoupon" property="discountCoupon"/>
+        <result column="coupon" property="coupon"/>
+    </resultMap>
+
+    <select id="personCenter" parameterType="java.lang.String" resultMap="PersonCenterMap">
+        SELECT u.user_id, u.user_nick_name, CONCAT(u.base_path, u.user_photo) AS user_photo,
+            IFNULL(u.user_gender,0) AS user_gender, IFNULL(u.grade,0) AS grade,
+            IFNULL(u.user_introduction,'') AS user_introduction, DATEDIFF(NOW(), u.create_time) AS meet_days,
+            0 + CAST(IFNULL(a.gold_number,0) AS CHAR) AS gold_number, IFNULL(a.diamond_number,0) AS diamond_number,
+            IFNULL(a.month_recommend_number,0) AS month_recommend_number, IFNULL(a.recommend_number,0) AS recommend_number,
+            m.msg_count, h.read_count, s.sign_days,IFNULL((SELECT COUNT(1) FROM user_coupon c WHERE c.user_id = 1 AND c.coupon_type = 0),
+                0) AS discountCoupon,
+            IFNULL((SELECT COUNT(1)FROM user_coupon c WHERE c.user_id = 1 AND c.coupon_type = 1 OR c.coupon_type = 2),0) AS coupon
+        FROM `user` u
+            LEFT JOIN tbl_novel_account_center a ON u.user_id=a.user_id
+            LEFT JOIN (SELECT COUNT(1) AS msg_count FROM tbl_novel_message WHERE user_id=#{userId} AND message_status = 0) m ON 1=1
+            LEFT JOIN (SELECT COUNT(1) AS read_count FROM tbl_novel_read_history WHERE user_id=#{userId}) h ON 1=1
+            LEFT JOIN (SELECT COUNT(1) AS sign_days FROM user_sign_in WHERE user_id=#{userId}) s ON 1=1
+        WHERE u.user_id=#{userId}
+    </select>
+
+</mapper>

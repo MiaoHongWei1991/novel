@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+        <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.novel.cn.dao.mapper.NovelAnnouncementMapper">
+    <resultMap id="BaseResultMap" type="com.novel.cn.dao.entity.NovelAnnouncement">
+        <id column="id" property="id"/>
+        <result column="novel_id" property="novelId"/>
+        <result column="user_id" property="userId"/>
+        <result column="novel_title" property="novelTitle"/>
+        <result column="novel_content" property="novelContent"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="end_time" property="overTime"/>
+        <result column="update_time" property="updateTime"/>
+        <!--表外字段 -->
+        <result column="fuzzy" property="fuzzy"/>
+        <result column="publish_status" property="publishStatus"/>
+    </resultMap>
+    <!--查询作品公告 -->
+<select id="queryAnnouncement" parameterType="java.lang.String" resultMap="BaseResultMap">
+	SELECT
+			tn.id,
+			tn.novel_title,
+			tn.publish_status,
+			s.id AS 公告id,
+			s.create_time,
+			s.`status`,
+			s.end_time,
+			s.novel_content,
+			s.update_time
+		FROM
+			tbl_novel_author a
+		LEFT JOIN tbl_novel tn ON a.user_id = tn.user_id
+		LEFT JOIN tbl_novel_ans s ON s.novel_id = tn.id
+		WHERE
+			tn.publish_status = '1'
+		AND a.user_id = #{userId}
+		GROUP BY
+			tn.create_time DESC
+</select>
+
+    <select id="novelIdFindAnnoucement" parameterType="java.lang.String" resultType="com.novel.cn.web.announcementController.result.NovelIdFindAnnoucement">
+       SELECT  a.novel_id as novelId,
+	      a.novel_content as novelContent
+          FROM
+	      tbl_novel_ans a
+          WHERE
+	      a.novel_id = #{novelId}
+    </select>
+
+
+<!--新增公告 -->
+<insert id="insertAnnouncement" parameterType="com.novel.cn.dao.entity.NovelAnnouncement">
+
+    INSERT INTO tbl_novel_ans
+    (novel_id,novel_title,status,novel_content,create_time,
+    end_time,
+    update_time)
+    VALUES
+    (
+    #{novelId},#{novelTitle},#{status},#{novelContent},SYSDATE(),
+    #{overTime},
+    SYSDATE()
+    );
+</insert>
+<select id="findByIdAnnouncement" parameterType="java.lang.String" resultMap="BaseResultMap">
+    SELECT * FROM tbl_novel_ans where novel_id = #{novelId};
+</select>
+
+    <select id="findAnnouncement" resultType="java.lang.String">
+       SELECT id FROM tbl_novel_ans WHERE NOW()>end_time;
+</select>
+
+<delete id="delAnnouncement">
+    DELETE FROM tbl_novel_ans WHERE id in(
+    <foreach collection="idList" item="item" separator=",">
+        #{item}
+    </foreach>)
+</delete>
+
+<delete id="deleteAnnouncement">
+    DELETE FROM tbl_novel_ans WHERE novel_id = #{novelId}
+</delete>
+
+</mapper>

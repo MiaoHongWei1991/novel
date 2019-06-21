@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.novel.cn.dao.mapper.NovelCatalogueMapper" >
+  <resultMap id="CatalogueResultMap" type="com.novel.cn.dao.entity.NovelInfo">
+    <id column="id" property="id" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    <result column="novel_title" property="title" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    <result column="have_volumes" property="haveVolumes" javaType="java.lang.Integer" jdbcType="INTEGER" />
+    <result column="is_subscribe" property="isSubscibe" javaType="java.lang.String" jdbcType="VARCHAR" />
+    <collection property="volumeInfos" ofType="com.novel.cn.dao.entity.VolumeInfo" javaType="java.util.ArrayList">
+      <id column="volume_id" property="id" javaType="java.lang.String" jdbcType="VARCHAR"/>
+      <result column="volume" property="volume" javaType="java.lang.Integer" jdbcType="INTEGER" />
+      <result column="title" property="title" javaType="java.lang.String" jdbcType="VARCHAR" />
+      <result column="volume_novel_id" property="novelId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+      <result column="volume_status" property="status" javaType="java.lang.Integer" jdbcType="INTEGER" />
+      <collection property="chapterInfos" ofType="com.novel.cn.dao.entity.ChapterInfo" javaType="java.util.ArrayList" >
+        <id property="id" column="chapter_id" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter" property="chapter" javaType="java.lang.Integer" jdbcType="INTEGER" />
+        <result column="sub_title" property="title" javaType="java.lang.String" jdbcType="VARCHAR" />
+        <result column="is_free" property="isFree" javaType="java.lang.Integer" jdbcType="INTEGER" />
+        <result column="chapter_money" property="money" javaType="java.math.BigDecimal" jdbcType="DECIMAL" />
+        <result column="chapter_novel_id" property="novelId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter_volume_id" property="volumeId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter_words" property="words" javaType="java.lang.Integer" jdbcType="INTEGER" />
+        <result column="status" property="status" javaType="java.lang.Integer" jdbcType="INTEGER" />
+        <result column="update_num" property="updateNum" javaType="java.lang.Integer" jdbcType="INTEGER" />
+        <result column="is_subscribed" property="isSubscribed" javaType="java.lang.String" jdbcType="VARCHAR" />
+        <result column="update_status" property="updateStatus" javaType="java.lang.String" jdbcType="VARCHAR" />
+        <result column="is_locked" property="isLocked" javaType="java.lang.Boolean" jdbcType="BOOLEAN" />
+      </collection>
+    </collection>
+  </resultMap>
+
+  <select id="selectNovelCatalogue" resultMap="CatalogueResultMap">
+    SELECT
+      n.id, n.have_volumes, v.id AS volume_id, v.volume, v.novel_id AS volume_novel_id, v.title, v.status AS volume_status,
+      c.id AS chapter_id, c.chapter, c.sub_title, c.is_free, c.chapter_money,c.chapter_words, c.status, c.update_num,
+      c.create_time, c.update_time, c.novel_id AS chapter_novel_id, c.volume_id AS chapter_volume_id,
+    <if test="selectType == 1">
+      CASE WHEN tns.is_auto=1 THEN 'true' else 'false' END AS is_subscribe,
+      CASE WHEN c.id IS NOT NULL THEN (CASE WHEN r.id IS NOT NULL THEN "true" ELSE "false" END) ELSE NULL END AS is_subscribed,
+    </if>
+    #CASE WHEN c.create_time IS NULL THEN NULL ELSE IF(TIMESTAMPDIFF(HOUR, c.create_time, NOW()) >= 24,'0','1') END AS update_status,
+    CASE WHEN c.id IS NOT NULL THEN (CASE WHEN c.status != 1 THEN TRUE ELSE FALSE END) ELSE NULL END AS is_locked
+    FROM tbl_novel n
+    LEFT JOIN tbl_novel_volume v ON n.id=v.novel_id
+    LEFT JOIN tbl_novel_chapter c ON n.id=c.novel_id AND v.id=c.volume_id
+    <if test="selectType == 1">
+    LEFT JOIN (SELECT * FROM tbl_novel_consume_record WHERE novel_id=#{novelId} AND user_id=#{userId}) r ON n.id=r.novel_id AND v.id=r.novel_volume_id AND c.id=r.novel_chapter_id
+    LEFT JOIN (SELECT is_auto FROM tbl_novel_subscibe WHERE user_id=#{userId} AND novel_id=#{novelId}) tns ON 1=1
+    </if>
+    <where>
+      <if test="novelId != null and novelId != ''">n.id = #{novelId}</if>
+      <if test="volumeId != null and volumeId != ''">AND v.id = #{volumeId}</if>
+      <if test="volume != null and volume != ''">AND v.volume = #{volume}</if>
+      <if test="chapters != null and chapters.size()>0">
+        AND c.chapter IN (
+          <foreach collection="chapters" item="chapter" separator=",">
+            #{chapter}
+          </foreach>
+        )
+      </if>
+    </where>
+    ORDER BY v.volume ASC, c.chapter ASC
+  </select>
+
+  <resultMap id="ChapterResultMap" type="com.novel.cn.dao.entity.ChapterInfo">
+    <id property="id" column="id" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    <result column="chapter" property="chapter" javaType="java.lang.Integer" jdbcType="INTEGER" />
+    <result column="novel_id" property="novelId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    <result column="volume_id" property="volumeId" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    <result column="status" property="status" javaType="java.lang.Integer" jdbcType="INTEGER" />
+  </resultMap>
+
+  <select id="getChaptersByVolume" resultMap="ChapterResultMap">
+    SELECT id, chapter, novel_id, volume_id, status FROM tbl_novel_chapter WHERE novel_id=#{novelId}
+    <if test="volumeId != null and volumeId != ''">AND volume_id=#{volumeId}</if>
+    <if test="beginChapter != null"> AND chapter &gt;= #{beginChapter}</if>
+    <if test="endChapter != null"> AND chapter &lt;= #{endChapter}</if>
+  </select>
+
+  <update id="updateChapters" parameterType="java.util.List">
+    <foreach collection="list" item="item" index="index" open="" close="" separator=";">
+      UPDATE tbl_novel_chapter
+      <trim prefix="set" suffixOverrides=",">
+        <if test="item.chapter != null">chapter = #{item.chapter, jdbcType=INTEGER},</if>
+        <if test="item.volumeId != null">volume_id = #{item.volumeId, jdbcType=VARCHAR}</if>
+      </trim>
+      WHERE id = #{item.id, jdbcType=VARCHAR}
+    </foreach>
+  </update>
+
+  <resultMap id="NovelChaptersMap" type="com.novel.cn.dao.entity.NovelChapters">
+    <id column="novel_id" property="novelId" />
+    <collection property="chapterIds" ofType="java.lang.String" javaType="java.util.ArrayList">
+      <id column="chapter_id" property="chapterId" javaType="java.lang.String" />
+    </collection>
+  </resultMap>
+
+  <select id="getNovelChapters" parameterType="java.util.Set" resultMap="NovelChaptersMap">
+    SELECT c.novel_id, c.id AS chapter_id FROM tbl_novel_chapter c
+    LEFT JOIN tbl_novel_volume v ON c.novel_id=v.novel_id AND c.volume_id=v.id
+    WHERE c.novel_id IN
+    <foreach collection="novelIds" item="item" open="(" separator="," close=")">
+      #{item}
+    </foreach>
+    ORDER BY c.novel_id, v.volume, c.chapter ASC
+  </select>
+
+  <resultMap id="NovelCatalogueResultMap" type="com.novel.cn.dao.entity.NovelInfo">
+    <id column="id" property="id" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    <result column="novel_title" property="title" javaType="java.lang.String" jdbcType="VARCHAR"/>
+    <result column="have_volumes" property="haveVolumes" javaType="java.lang.Integer" jdbcType="INTEGER" />
+    <collection property="volumeInfos" ofType="com.novel.cn.dao.entity.VolumeInfo" javaType="java.util.ArrayList">
+      <id column="volume_id" property="id" javaType="java.lang.String" jdbcType="VARCHAR"/>
+      <result column="volume" property="volume" javaType="java.lang.Integer" jdbcType="INTEGER" />
+      <result column="title" property="title" javaType="java.lang.String" jdbcType="VARCHAR" />
+      <collection property="chapterInfos" ofType="com.novel.cn.dao.entity.ChapterInfo" javaType="java.util.ArrayList" >
+        <id column="chapter_id" property="id" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter" property="chapter" javaType="java.lang.Integer" jdbcType="INTEGER" />
+        <result column="sub_title" property="title" javaType="java.lang.String" jdbcType="VARCHAR" />
+        <result column="base_url" property="baseUrl" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="chapter_url" property="url" javaType="java.lang.String" jdbcType="VARCHAR"/>
+        <result column="upload_type" property="uploadType" javaType="java.lang.String" jdbcType="VARCHAR" />
+      </collection>
+    </collection>
+  </resultMap>
+
+  <select id="getDownloadNovelCatalogue" parameterType="java.lang.String" resultMap="NovelCatalogueResultMap">
+    SELECT n.id, n.novel_title, n.have_volumes, v.id AS volume_id, v.volume, v.title,
+          c.id AS chapter_id, c.chapter, c.sub_title, c.base_url, c.chapter_url, c.upload_type
+    FROM tbl_novel n
+      LEFT JOIN tbl_novel_volume v ON v.novel_id=n.id
+      LEFT JOIN tbl_novel_chapter c ON c.volume_id=v.id
+    WHERE n.id=#{novelId}
+    ORDER BY v.volume, c.chapter ASC
+  </select>
+
+</mapper>
